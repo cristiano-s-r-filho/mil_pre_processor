@@ -1,0 +1,9 @@
+Pillow>=11.0
+opencv-python-headless>=4.9
+numpy>=2.0
+shapely>=2.0
+tqdm>=4.66
+openslide-python>=1.4.0
+PyYAML>=6.0
+pytest>=8.0
+matplotlib>=3.8

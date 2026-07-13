@@ -1,0 +1,20 @@
+[project]
+name = "mil"
+version = "0.1.0"
+description = "Pipeline de triagem e classificacao de laminas de rim (HE/PAS)"
+requires-python = ">=3.12"
+dependencies = [
+    "Pillow>=11.0",
+    "opencv-python-headless>=4.9",
+    "numpy>=2.0",
+    "shapely>=2.0",
+    "tqdm>=4.66",
+    "openslide-python>=1.4.0",
+    "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "matplotlib>=3.8",
+]

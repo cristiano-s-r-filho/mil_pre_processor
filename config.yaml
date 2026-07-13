@@ -1,0 +1,46 @@
+# =============================================================================
+# MIL Pipeline - Configuracao
+# =============================================================================
+# Este arquivo contem todas as constantes e caminhos usados pelo projeto.
+# Copie para config.local.yaml e ajuste conforme necessario.
+# O config.local.yaml tem prioridade sobre este arquivo.
+# =============================================================================
+
+# --- Caminhos (ajuste para cada maquina - USE CAMINHOS ABSOLUTOS) ---
+# Windows:  "D:\\Projects\\mil\\dataset"
+# Linux:    "/home/usuario/mil/dataset"
+paths:
+  project_root: "D:\\Projects\\mil"
+  dataset_root: "D:\\Projects\\mil\\dataset"
+  dados_processados_root: "D:\\Projects\\mil\\dados_processados"
+  dados_para_patching_root: "D:\\Projects\\mil\\dados_para_patching"
+
+# --- Alelos validos ---
+alelos_validos:
+  - "0alelos"
+  - "1alelo"
+  - "2alelos"
+
+# --- Leitura de imagem (slide_reader) ---
+reader:
+  thumbnail_size: 1024
+  pil_max_image_pixels: 500000000
+
+# --- Classificacao de stain (phase1) ---
+stain_classifier:
+  fundo_saturacao_min: 20
+  magenta_hue_min: 145
+  magenta_hue_max: 175
+
+# --- Deteccao de tecido (phase2) ---
+tissue_detector:
+  area_min_px: 500
+
+# --- Builder (phase3) ---
+builder:
+  padrao_saida_final: "ID{patient}_{image}_{stain}_{status}.tif"
+
+# --- Cropper (phase4) ---
+cropper:
+  s0_pattern: "^ID(?P<patient>\\d+)_(?P<image>\\d+)_(?P<stain>HE|PAS)_S0\\.tif$"
+  n0_pattern: "^ID(?P<patient>\\d+)_(?P<image>\\d+)_(?P<stain>HE|PAS)_N0\\.tif$"

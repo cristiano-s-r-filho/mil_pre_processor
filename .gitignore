@@ -1,0 +1,58 @@
+# =============================================================================
+# MIL Pipeline - .gitignore
+# =============================================================================
+
+# --- Datasets e dados (NUNCA versionar) ---
+dataset/
+dados_processados/
+dados_para_patching/
+dados_originais/
+*.svs
+*.ndpi
+*.mrxs
+*.tif
+*.tiff
+
+# --- Config local (tem caminhos da maquina) ---
+config.local.yaml
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+*.whl
+
+# --- Virtual Environment ---
+.venv/
+venv/
+ENV/
+
+# --- IDE ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- Logs e cache ---
+*.log
+_pytest_cache/
+.pytest_cache/
+.mypy_cache/
+
+# --- Jupyter ---
+.ipynb_checkpoints/
+qu_path_wsi/
+# --- Outputs temporarios ---
+*.tmp
+*.bak
