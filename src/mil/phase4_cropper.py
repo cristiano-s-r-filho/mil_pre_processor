@@ -10,6 +10,7 @@ import openslide
 from tqdm import tqdm
 
 from mil.config import get
+from mil.margin import apply_margin_to_polygon
 
 logger = logging.getLogger(__name__)
 
@@ -24,12 +25,33 @@ def _crop_regions_from_s0(
     patient: str,
     image: str,
     stain: str,
+    feather_radius: int = 0,
+    edge_margin: int | None = None,
+    edge_mode: str | None = None,
 ) -> int:
+    """Recorta regiões de um S0 usando GeoJSON com margem configurável.
+
+    Args:
+        s0_path: Caminho do S0.tif.
+        geojson_path: Caminho do GeoJSON.
+        out_dir: Diretório de saída.
+        patient: ID do paciente.
+        image: Número da imagem.
+        stain: Tipo de stain (HE/PAS).
+        feather_radius: Raio de feathering (0 = desativado).
+        edge_margin: Margem de borda (sobrescreve config).
+        edge_mode: Modo de borda (sobrescreve config).
+
+    Returns:
+        Número de regiões recortadas.
+    """
     slide = openslide.OpenSlide(s0_path)
     geojson = json.loads(open(geojson_path).read())
     features = geojson.get("features", [])
     sw, sh = slide.dimensions
     count = 0
+
+    margin, mode = get_margin_config(edge_margin, edge_mode)
 
     for idx, feat in enumerate(features, start=1):
         geom = feat.get("geometry", {})
@@ -37,6 +59,8 @@ def _crop_regions_from_s0(
             continue
 
         coords = np.array(geom["coordinates"][0], dtype=np.float64)
+        coords = apply_margin_to_polygon(coords, margin, mode)
+
         xs, ys = coords[:, 0], coords[:, 1]
 
         x0 = max(0, int(xs.min()))
@@ -57,13 +81,17 @@ def _crop_regions_from_s0(
         region_np = np.array(region.convert("RGB"))
 
         shifted = coords - np.array([x0, y0], dtype=np.float64)
-        mask = np.zeros((h, w), dtype=np.uint8)
-        cv2.fillPoly(mask, [shifted.astype(np.int32)], 255)
 
-        if mask.sum() == 0:
+        if feather_radius > 0:
+            mask = _create_feathered_mask(shifted, h, w, feather_radius)
+        else:
+            mask = _create_binary_mask(shifted, h, w)
+
+        if mask.max() == 0:
             continue
 
-        masked = region_np * (mask[:, :, np.newaxis] > 0)
+        masked = region_np * mask[:, :, np.newaxis]
+        masked = np.clip(masked, 0, 255).astype(np.uint8)
 
         out_name = f"ID{patient}_{image}_{stain}_SD_{idx}.tif"
         out_path = os.path.join(out_dir, out_name)
@@ -75,11 +103,94 @@ def _crop_regions_from_s0(
     return count
 
 
+def get_margin_config(
+    edge_margin: int | None = None,
+    edge_mode: str | None = None,
+) -> tuple[int, str]:
+    """Obtém configuração de margem do config ou argumentos.
+
+    Args:
+        edge_margin: Valor externo (sobrescreve config).
+        edge_mode: Valor externo (sobrescreve config).
+
+    Returns:
+        Tupla (margin, mode).
+    """
+    margin = edge_margin if edge_margin is not None else get("cropper.edge_margin", 0)
+    mode = edge_mode if edge_mode is not None else get("cropper.edge_mode", "exact")
+    return margin, mode
+
+
+def _create_binary_mask(
+    polygon: np.ndarray,
+    h: int,
+    w: int,
+) -> np.ndarray:
+    """Cria máscara binária sem feathering.
+
+    Args:
+        polygon: Coordenadas do polígono (N, 2) em coordenadas locais.
+        h: Altura da região.
+        w: Largura da região.
+
+    Returns:
+        Máscara uint8 (H, W) com valores 0 ou 1.
+    """
+    binary = np.zeros((h, w), dtype=np.uint8)
+    pts = polygon.astype(np.int32).reshape((-1, 1, 2))
+    cv2.fillPoly(binary, [pts], 255)
+    return (binary > 0).astype(np.float32)
+
+
+def _create_feathered_mask(
+    polygon: np.ndarray,
+    h: int,
+    w: int,
+    feather_radius: int = 10,
+) -> np.ndarray:
+    """Cria mascara com bordas suaves usando distance transform + Gaussian blur.
+
+    Args:
+        polygon: Coordenadas do poligono (N, 2) em coordenadas locais.
+        h: Altura da regiao.
+        w: Largura da regiao.
+        feather_radius: Raio do feathering (pixels).
+
+    Returns:
+        Mascara float32 (H, W) com valores [0.0, 1.0].
+    """
+    binary = np.zeros((h, w), dtype=np.uint8)
+    pts = polygon.astype(np.int32).reshape((-1, 1, 2))
+    cv2.fillPoly(binary, [pts], 255)
+
+    dist = cv2.distanceTransform(binary, cv2.DIST_L2, 3)
+    dist_norm = np.clip(dist / max(feather_radius, 1), 0, 1)
+
+    ksize = feather_radius * 2 + 1
+    dist_smooth = cv2.GaussianBlur(dist_norm, (ksize, ksize), 0)
+
+    return dist_smooth.astype(np.float32)
+
+
 def process_alelo(
     dados_processados_root: str,
     output_root: str,
     alelo: str,
+    edge_margin: int | None = None,
+    edge_mode: str | None = None,
 ) -> tuple[int, int]:
+    """Processa um alelo na fase 4 (cropping).
+
+    Args:
+        dados_processados_root: Raiz dos dados processados.
+        output_root: Raiz de saída.
+        alelo: Nome do alelo.
+        edge_margin: Margem de borda (sobrescreve config).
+        edge_mode: Modo de borda (sobrescreve config).
+
+    Returns:
+        Tupla (cortadas_count, nao_cortadas_count).
+    """
     alelo_dir = os.path.join(dados_processados_root, alelo)
     if not os.path.isdir(alelo_dir):
         logger.error("Diretorio nao encontrado: %s", alelo_dir)
@@ -119,7 +230,12 @@ def process_alelo(
                     logger.warning("GeoJSON nao encontrado para %s", s0_name)
                     continue
 
-                n = _crop_regions_from_s0(s0_path, geojson_path, out_alelo, patient, image, stain)
+                n = _crop_regions_from_s0(
+                    s0_path, geojson_path, out_alelo, patient, image, stain,
+                    feather_radius=get("cropper.feather_radius", 0),
+                    edge_margin=edge_margin,
+                    edge_mode=edge_mode,
+                )
                 cortadas_count += n
 
         nao_cortadas_dir = os.path.join(patient_path, "nao_cortadas")

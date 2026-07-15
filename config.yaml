@@ -35,6 +35,8 @@ stain_classifier:
 # --- Deteccao de tecido (phase2) ---
 tissue_detector:
   area_min_px: 500
+  edge_margin: 0           # pixels no thumbnail (expande mascara)
+  edge_mode: "exact"       # "exact" | "outside" | "inside"
 
 # --- Builder (phase3) ---
 builder:
@@ -44,3 +46,11 @@ builder:
 cropper:
   s0_pattern: "^ID(?P<patient>\\d+)_(?P<image>\\d+)_(?P<stain>HE|PAS)_S0\\.tif$"
   n0_pattern: "^ID(?P<patient>\\d+)_(?P<image>\\d+)_(?P<stain>HE|PAS)_N0\\.tif$"
+  feather_radius: 0        # DESATIVADO para teste de margem
+  edge_margin: 0           # pixels no espaco original
+  edge_mode: "exact"       # "exact" | "outside" | "inside"
+
+# --- Runtime Logging ---
+runtime_log:
+  enabled: true            # Habilitar logs de runtime
+  dir: "_runtime_logs"     # Diretorio para logs de runtime

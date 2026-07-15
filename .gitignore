@@ -45,6 +45,7 @@ Thumbs.db
 desktop.ini
 
 # --- Logs e cache ---
+_logs/
 *.log
 _pytest_cache/
 .pytest_cache/

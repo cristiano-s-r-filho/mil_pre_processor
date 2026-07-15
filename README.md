@@ -24,6 +24,22 @@ O setup cria:
 - Arquivo `config.local.yaml` (caminhos locais)
 - Alias `run-proc` no `.bashrc`
 
+### Atualizando uma instalação existente
+
+Se a máquina já possui uma instalação anterior, use `update.sh` para preservar as configurações locais:
+
+```bash
+cd mil
+./update.sh              # Git pull + atualizar dependências
+./update.sh --pull-only  # Apenas git pull
+./update.sh --deps-only  # Apenas atualizar dependências
+```
+
+Arquivos preservados automaticamente:
+- `config.local.yaml` (sua configuração)
+- `.venv/` (dependências instaladas)
+- `_logs/runs.json` (histórico de execuções)
+
 ## Configuração
 
 Edite `config.local.yaml` com os caminhos da sua máquina:
@@ -38,6 +54,39 @@ paths:
 ```
 
 **Importante:** Use caminhos absolutos.
+
+### Configuração do Cropping (Fase 4)
+
+```yaml
+cropper:
+  feather_radius: 0        # 0 = desativado
+  edge_margin: 0           # pixels no espaço original
+  edge_mode: "exact"       # "exact" | "outside" | "inside"
+```
+
+### Configuração da Margem de Borda
+
+A margem permite preservar mais informação ao redor do tecido detectado:
+
+| Parâmetro | Fase | Descrição |
+|-----------|------|-----------|
+| `edge_margin` | 2 e 4 | Pixels de margem |
+| `edge_mode` | 2 e 4 | Modo: `exact`, `outside`, `inside` |
+
+```yaml
+tissue_detector:
+  edge_margin: 0           # pixels no thumbnail
+  edge_mode: "exact"       # "exact" | "outside" | "inside"
+
+cropper:
+  edge_margin: 0           # pixels no espaço original
+  edge_mode: "exact"       # "exact" | "outside" | "inside"
+```
+
+**Modos:**
+- `exact` = comportamento atual (sem margem)
+- `outside` = expandir polígono (mais contexto)
+- `inside` = contrair polígono (mais conservador)
 
 ## Uso
 
@@ -55,6 +104,9 @@ run-proc --alelo 0alelos --verbose
 
 # Ver relatório de execuções anteriores
 run-proc --report
+
+# Relatório extenso (detalhado por arquivo)
+run-proc --report --extensive
 ```
 
 ### Executar cropping (fase 4)
@@ -65,6 +117,22 @@ run-proc --phase4
 
 # Cortar alelo específico
 run-proc --phase4 --alelo 0alelos
+
+# Com margem de 50px (expandir bordas)
+run-proc --phase4 --alelo 0alelos --edge-margin 50 --edge-mode outside
+
+# Com margem conservadora (contrair bordas)
+run-proc --phase4 --alelo 0alelos --edge-margin 30 --edge-mode inside
+```
+
+### Relatório
+
+```bash
+# Relatório resumido
+run-proc --report
+
+# Relatório extenso (mostra cada arquivo processado e com erro)
+run-proc --report --extensive
 ```
 
 ### Usar script standalone (sem alias)
@@ -83,16 +151,19 @@ mil/
 ├── pyproject.toml           # Metadados e dependências
 ├── requirements.txt         # Dependências pip
 ├── setup.sh                 # Script de setup
+├── update.sh                # Script de atualização
 ├── run-proc.sh              # Script de execução
 ├── src/mil/
 │   ├── config.py            # Loader de configuração
+│   ├── margin.py            # Funções de margem (buffer/morph)
 │   ├── pipeline.py          # Pipeline principal (fases 1-3)
 │   ├── phase1_stain_classifier.py   # Classificação HE/PAS
 │   ├── phase2_tissue_detector.py    # Deteção de tecido
 │   ├── phase3_dataset_builder.py    # Organização do dataset
 │   ├── phase4_cropper.py            # Cropping via OpenSlide
 │   ├── slide_reader.py      # Leitura de imagens
-│   └── run_logger.py        # Logging de execuções
+│   ├── run_logger.py        # Logging de execuções
+│   └── report.py            # Relatórios com Rich
 ├── scripts/
 │   ├── run.py               # Script principal
 │   └── run_phase4.py        # Script da fase 4
@@ -110,6 +181,13 @@ mil/
 | 2 | Deteção de tecido (polígonos) | Thumbnail | GeoJSON |
 | 3 | Organização do dataset | `.tif` + GeoJSON | `dados_processados/` |
 | 4 | Cropping das regiões | `dados_processados/` | `dados_para_patching/` |
+
+### Funcionalidades
+
+- **Margem configurável**: Expansão/contração de bordas (fases 2 e 4)
+- **Feathering opcional**: Suavização de bordas (fase 4)
+- **Relatórios Rich**: UI formatada com cores e tabelas
+- **CLI flexível**: Flags para teste rápido sem editar config
 
 ## Formatos de Arquivo
 
@@ -135,6 +213,7 @@ mil/
 - `Pillow` - Manipulação de imagens
 - `PyYAML` - Leitura de configuração
 - `tqdm` - Barra de progresso
+- `rich` - Relatórios formatados e cores no terminal
 
 ## Solução de Problemas
 

@@ -3,19 +3,37 @@ import numpy as np
 from shapely.geometry import Polygon
 
 from mil.config import get
+from mil.margin import apply_margin_to_mask
 
 
 def detect(
     thumb_rgb: np.ndarray,
     stain: str = "HE",
     orig_size: tuple[int, int] | None = None,
+    edge_margin: int | None = None,
+    edge_mode: str | None = None,
 ) -> tuple[bool, list[Polygon]]:
+    """Detecta polígonos de tecido na thumbnail.
+
+    Args:
+        thumb_rgb: Thumbnail RGB (H, W, 3) uint8.
+        stain: "HE" ou "PAS".
+        orig_size: Tamanho original (width, height) para escala.
+        edge_margin: Margem de borda (sobrescreve config).
+        edge_mode: Modo de borda (sobrescreve config).
+
+    Returns:
+        Tupla (has_multiple, polygons).
+    """
     if stain == "PAS":
         mask = _pas_saturation_mask(thumb_rgb)
     else:
         mask = _he_pinkness_mask(thumb_rgb)
 
     mask = _morph_cleanup(mask)
+
+    margin, mode = get_margin_config(edge_margin, edge_mode)
+    mask = apply_margin_to_mask(mask, margin, mode)
 
     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
@@ -49,6 +67,24 @@ def detect(
 
     has_multiple = len(polygons) > 1
     return has_multiple, polygons
+
+
+def get_margin_config(
+    edge_margin: int | None = None,
+    edge_mode: str | None = None,
+) -> tuple[int, str]:
+    """Obtém configuração de margem do config ou argumentos.
+
+    Args:
+        edge_margin: Valor externo (sobrescreve config).
+        edge_mode: Valor externo (sobrescreve config).
+
+    Returns:
+        Tupla (margin, mode).
+    """
+    margin = edge_margin if edge_margin is not None else get("tissue_detector.edge_margin", 0)
+    mode = edge_mode if edge_mode is not None else get("tissue_detector.edge_mode", "exact")
+    return margin, mode
 
 
 def _he_pinkness_mask(rgb: np.ndarray) -> np.ndarray:

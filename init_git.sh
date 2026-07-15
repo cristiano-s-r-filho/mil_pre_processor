@@ -46,6 +46,7 @@ git add \
     pyproject.toml \
     requirements.txt \
     setup.sh \
+    update.sh \
     scripts/*.py \
     src/mil/*.py \
     docs/*.md
@@ -85,4 +86,11 @@ echo "  1. Edite config.local.yaml com os caminhos da sua maquina"
 echo "  2. git add . && git commit -m 'update: config local'"
 echo "  3. git remote add origin <url-do-repositorio>"
 echo "  4. git push -u origin main"
+echo ""
+echo "Na maquina remota (via SSH):"
+echo "  git clone <url-do-repositorio>"
+echo "  cd mil && ./setup.sh"
+echo ""
+echo "Para atualizar sem resetar:"
+echo "  cd mil && ./update.sh"
 echo ""

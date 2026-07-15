@@ -81,17 +81,12 @@ def finish_run(run: dict, log_root: str) -> str:
     return os.path.join(log_dir, RUNS_FILE)
 
 
-def print_report(run: dict) -> None:
-    print(
-        f"\n{'='*50}\n"
-        f"Relatorio da execucao: {run['run_id']}\n"
-        f"  Alelo:    {run['alelo']}\n"
-        f"  Total:    {run['total']}\n"
-        f"  OK:       {run['ok']}\n"
-        f"  Erros:    {run['errors']}\n"
-        f"  Cortados: {run['cortados']}\n"
-        f"{'='*50}\n"
-    )
+def print_report(run: dict, extensive: bool = False) -> None:
+    from mil.report import report_summary, report_extensive
+    if extensive:
+        report_extensive(run)
+    else:
+        report_summary(run)
 
 
 def list_runs(log_root: str) -> list[dict]:
