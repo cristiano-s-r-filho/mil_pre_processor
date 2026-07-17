@@ -3,7 +3,7 @@ import numpy as np
 from shapely.geometry import Polygon
 
 from mil.config import get
-from mil.margin import apply_margin_to_mask
+from mil.margin import apply_margin_to_mask, get_margin_config
 
 
 def detect(
@@ -32,7 +32,7 @@ def detect(
 
     mask = _morph_cleanup(mask)
 
-    margin, mode = get_margin_config(edge_margin, edge_mode)
+    margin, mode = get_margin_config("phase2", edge_margin, edge_mode)
     mask = apply_margin_to_mask(mask, margin, mode)
 
     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -67,24 +67,6 @@ def detect(
 
     has_multiple = len(polygons) > 1
     return has_multiple, polygons
-
-
-def get_margin_config(
-    edge_margin: int | None = None,
-    edge_mode: str | None = None,
-) -> tuple[int, str]:
-    """Obtém configuração de margem do config ou argumentos.
-
-    Args:
-        edge_margin: Valor externo (sobrescreve config).
-        edge_mode: Valor externo (sobrescreve config).
-
-    Returns:
-        Tupla (margin, mode).
-    """
-    margin = edge_margin if edge_margin is not None else get("tissue_detector.edge_margin", 0)
-    mode = edge_mode if edge_mode is not None else get("tissue_detector.edge_mode", "exact")
-    return margin, mode
 
 
 def _he_pinkness_mask(rgb: np.ndarray) -> np.ndarray:

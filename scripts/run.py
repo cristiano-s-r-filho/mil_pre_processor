@@ -6,7 +6,7 @@ import logging
 import os
 
 from mil.config import load_config, get
-from mil.pipeline import process_alelo
+from mil.pipeline import process_alelo, generate_reports
 from mil.report import (
     console,
     print_error_msg,
@@ -39,7 +39,8 @@ def main() -> None:
             "  run-proc --phase4 --alelo 0alelos --edge-margin 50 --edge-mode outside\n"
             "  run-proc --report\n"
             "  run-proc --report --extensive\n"
-            "  run-proc --runtime-logs"
+            "  run-proc --runtime-logs\n"
+            "  run-proc --reports"
         ),
     )
     parser.add_argument(
@@ -69,6 +70,11 @@ def main() -> None:
         help="Executar fase 4 (cropping para dados_para_patching)",
     )
     parser.add_argument(
+        "--phase5",
+        action="store_true",
+        help="Executar fase 5 (renomeacao para patching)",
+    )
+    parser.add_argument(
         "--extensive", "-e",
         action="store_true",
         help="Relatorio extenso (detalhado por arquivo)",
@@ -77,6 +83,11 @@ def main() -> None:
         "--report",
         action="store_true",
         help="Mostrar relatorio de execucoes anteriores e sair",
+    )
+    parser.add_argument(
+        "--reports",
+        action="store_true",
+        help="Mostrar relatórios detalhados de _reports/ e sair",
     )
     parser.add_argument(
         "--runtime-logs",
@@ -124,6 +135,56 @@ def main() -> None:
                     report_extensive(r)
                 else:
                     report_summary(r)
+        return
+
+    # --- Modo relatórios detalhados ---
+    if args.reports:
+        from mil.runtime_log import list_runtime_logs, load_runtime_logs
+        from mil.alerts import generate_alert_report, format_alerts_for_display
+        from mil.balance import generate_balance_report
+        from mil.report import (
+            report_balance_table,
+            report_corruption_table,
+            report_patching_ready,
+            save_reports_to_directory,
+        )
+
+        run_ids = list_runtime_logs(args.output)
+        if not run_ids:
+            print_error_msg("Nenhum log de runtime encontrado para gerar relatórios.")
+        else:
+            print_header()
+            print_step(f"Relatórios detalhados ({len(run_ids)} runs)")
+            for run_id in run_ids:
+                console.print(f"\n[bold]Run ID: {run_id}[/bold]")
+                logs = load_runtime_logs(args.output, run_id)
+
+                # Gerar relatório de balanceamento
+                alelos = get("alelos_validos", [])
+                balance_report = generate_balance_report(logs, alelos)
+
+                # Gerar relatório de alertas
+                alert_report = generate_alert_report(balance_report, run_id)
+
+                # Salvar relatórios
+                reports_dir = get("paths.reports_dir", os.path.join(args.output, "_reports"))
+                save_reports_to_directory(
+                    run_id=run_id,
+                    reports_dir=reports_dir,
+                    balance_report=balance_report,
+                    alert_report=alert_report,
+                )
+
+                # Imprimir relatórios
+                report_balance_table(balance_report)
+                report_corruption_table(balance_report)
+                report_patching_ready(balance_report)
+
+                # Imprimir alertas
+                console.print()
+                console.print("[bold]Alertas[/bold]")
+                console.print(format_alerts_for_display(alert_report))
+
         return
 
     # --- Modo runtime logs ---
@@ -216,6 +277,33 @@ def main() -> None:
         print_phase_indicator("Fase 4 - Cropping", "end")
         return
 
+    # --- Modo fase 5 ---
+    if args.phase5:
+        from mil.phase5_renamer import process_alelo as phase5_process
+
+        print_header()
+        print_phase_indicator("Fase 5 - Renaming", "start")
+
+        dados_patch = os.path.join(os.path.dirname(args.output), get("paths.dados_para_patching_root"))
+        dados_renamed = os.path.join(os.path.dirname(args.output), "dados_renamed")
+
+        for alelo in alelos:
+            print_step(f"Fase 5 - {alelo}")
+            sd, nd, skipped = phase5_process(
+                input_root=dados_patch,
+                output_root=dados_renamed,
+                alelo=alelo,
+            )
+            console.print(
+                f"  [green]SD:[/green] {sd}  "
+                f"[green]ND:[/green] {nd}  "
+                f"[yellow]Pulados:[/yellow] {skipped}  "
+                f"Total: {sd + nd}"
+            )
+
+        print_phase_indicator("Fase 5 - Renaming", "end")
+        return
+
     # --- Modo pipeline (fases 1-3) ---
     print_header()
     print_phase_indicator("Pipeline (fases 1-3)", "start")
@@ -227,9 +315,12 @@ def main() -> None:
             "Pipeline",
         )
 
+    run_ids = []
+    all_skipped_files = []
     for alelo in alelos:
         print_step(f"Processando {alelo}")
         run_id = next_run_id(alelo)
+        run_ids.append(run_id)
         run = create_run(run_id, alelo, args.output)
 
         process_alelo(
@@ -244,6 +335,13 @@ def main() -> None:
         log_path = finish_run(run, args.output)
         report_summary(run)
         print_success(f"Log salvo em: {log_path}")
+
+        # Coletar arquivos pulados deste run
+        skipped = run.get("skipped_files", [])
+        all_skipped_files.extend(skipped)
+
+    # Gerar relatórios detalhados (uma única vez com todos os run_ids)
+    generate_reports(args.output, run_ids, alelos, all_skipped_files)
 
     print_phase_indicator("Pipeline (fases 1-3)", "end")
 

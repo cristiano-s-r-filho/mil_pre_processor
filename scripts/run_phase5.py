@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
+"""MIL Phase5 - Renomeacao de arquivos para patching."""
+
 import argparse
 import logging
 
 from mil.config import load_config, get
-from mil.phase4_cropper import process_alelo
+from mil.phase5_renamer import process_alelo
 
 
 def main() -> None:
     load_config()
 
     parser = argparse.ArgumentParser(
-        description="MIL Phase4 - Cropping de regioes para patching"
+        description="MIL Phase5 - Renomeacao de arquivos para patching"
     )
     parser.add_argument(
         "--alelo",
@@ -19,19 +21,14 @@ def main() -> None:
         help="Pasta de alelos a processar (default: all)",
     )
     parser.add_argument(
-        "--dataset",
-        default=get("paths.dataset_root"),
-        help="Raiz do dataset original",
-    )
-    parser.add_argument(
-        "--processed",
-        default=get("paths.dados_processados_root"),
-        help="Raiz dos dados processados (fase3)",
+        "--input",
+        default=get("paths.dados_para_patching_root"),
+        help="Raiz de entrada (dados_para_patching)",
     )
     parser.add_argument(
         "--output",
-        default=get("paths.dados_para_patching_root"),
-        help="Raiz de saida (dados_para_patching)",
+        default="dados_renamed",
+        help="Raiz de saida (default: dados_renamed)",
     )
     parser.add_argument(
         "--verbose", "-v",
@@ -53,23 +50,25 @@ def main() -> None:
     for alelo in alelos:
         logger = logging.getLogger(__name__)
         logger.info("=" * 50)
-        logger.info("Processando alelo: %s", alelo)
+        logger.info("Renomeando alelo: %s", alelo)
         logger.info("=" * 50)
 
-        sd_count, nd_count = process_alelo(
-            dados_processados_root=args.processed,
+        sd_count, nd_count, skipped = process_alelo(
+            input_root=args.input,
             output_root=args.output,
             alelo=alelo,
         )
 
         logger.info(
             "\nRelatorio %s:\n"
-            "  Cortados (SD): %d\n"
-            "  Copiados (ND): %d\n"
+            "  SD renomeados: %d\n"
+            "  ND renomeados: %d\n"
+            "  Pulados: %d\n"
             "  Total: %d",
             alelo,
             sd_count,
             nd_count,
+            skipped,
             sd_count + nd_count,
         )
 

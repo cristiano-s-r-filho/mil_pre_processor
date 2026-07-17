@@ -39,6 +39,13 @@ if ! command -v python3 &>/dev/null; then
 fi
 
 PY_VER=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+PY_MAJOR=$(python3 -c "import sys; print(sys.version_info.major)")
+PY_MINOR=$(python3 -c "import sys; print(sys.version_info.minor)")
+
+if [ "$PY_MAJOR" -lt 3 ] || ([ "$PY_MAJOR" -eq 3 ] && [ "$PY_MINOR" -lt 10 ]); then
+    err "Python $PY_VER encontrado, mas e necessario Python 3.10+."
+    exit 1
+fi
 ok "Python $PY_VER encontrado"
 
 # --- Verificar se ja existe setup ---
@@ -60,6 +67,14 @@ if [ -d ".venv" ] && [ -f "config.local.yaml" ]; then
             UPDATE_ONLY=true
         fi
     fi
+fi
+
+# --- Verificar OpenSlide (dependencia do sistema) ---
+if ! dpkg -s libopenslide-dev &>/dev/null && ! dpkg -s libopenslide0 &>/dev/null; then
+    warn "OpenSlide nao detectado. Instale com: sudo apt install libopenslide-dev"
+    warn "Se ja esta instalado, ignore este aviso."
+else
+    ok "OpenSlide detectado"
 fi
 
 # --- Criar virtual environment ---

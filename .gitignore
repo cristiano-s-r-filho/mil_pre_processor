@@ -7,6 +7,7 @@ dataset/
 dados_processados/
 dados_para_patching/
 dados_originais/
+dados_renamed/
 *.svs
 *.ndpi
 *.mrxs
@@ -46,6 +47,8 @@ desktop.ini
 
 # --- Logs e cache ---
 _logs/
+_reports/
+_runtime_logs/
 *.log
 _pytest_cache/
 .pytest_cache/

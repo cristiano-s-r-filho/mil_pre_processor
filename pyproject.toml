@@ -2,7 +2,7 @@
 name = "mil"
 version = "0.1.0"
 description = "Pipeline de triagem e classificacao de laminas de rim (HE/PAS)"
-requires-python = ">=3.12"
+requires-python = ">=3.10"
 dependencies = [
     "Pillow>=11.0",
     "opencv-python-headless>=4.9",

@@ -40,6 +40,31 @@ def build(
     os.makedirs(dst_dir, exist_ok=True)
 
     dst_path = os.path.join(dst_dir, out_name)
+
+    # Verificar se o arquivo já existe para evitar duplicatas
+    if os.path.exists(dst_path):
+        logger.info("Arquivo já existe (pulando): %s", dst_path)
+        return dst_path
+
+    # Verificar se existe como S0 (quando deveria ser N0) ou vice-versa
+    # Se existir em ambas as pastas, remover a anterior
+    other_status = "N0" if has_multiple else "S0"
+    other_subdir = "nao_cortadas" if has_multiple else "cortadas"
+    other_out_name = _make_output_name(patient, image, stain, other_status)
+    other_dst_dir = os.path.join(dst_root, alelo, f"ID{patient}", other_subdir)
+    other_dst_path = os.path.join(other_dst_dir, other_out_name)
+
+    if os.path.exists(other_dst_path):
+        logger.warning(
+            "Removendo duplicata: %s (arquivo existe em ambas as pastas)",
+            other_dst_path,
+        )
+        os.remove(other_dst_path)
+        # Remover GeoJSON associado se existir
+        other_geojson = other_dst_path.replace(".tif", ".geojson")
+        if os.path.exists(other_geojson):
+            os.remove(other_geojson)
+
     shutil.copy2(src_path, dst_path)
     logger.info("Copiado: %s -> %s", src_path, dst_path)
 

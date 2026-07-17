@@ -6,14 +6,14 @@
 # O config.local.yaml tem prioridade sobre este arquivo.
 # =============================================================================
 
-# --- Caminhos (ajuste para cada maquina - USE CAMINHOS ABSOLUTOS) ---
-# Windows:  "D:\\Projects\\mil\\dataset"
-# Linux:    "/home/usuario/mil/dataset"
+# --- Caminhos (ajuste para cada maquina) ---
+# Usa caminhos relativos ao project_root.
+# Crie config.local.yaml para sobrescrever com caminhos absolutos se necessario.
 paths:
-  project_root: "D:\\Projects\\mil"
-  dataset_root: "D:\\Projects\\mil\\dataset"
-  dados_processados_root: "D:\\Projects\\mil\\dados_processados"
-  dados_para_patching_root: "D:\\Projects\\mil\\dados_para_patching"
+  project_root: "."
+  dataset_root: "./dataset"
+  dados_processados_root: "./dados_processados"
+  dados_para_patching_root: "./dados_para_patching"
 
 # --- Alelos validos ---
 alelos_validos:
@@ -50,7 +50,21 @@ cropper:
   edge_margin: 0           # pixels no espaco original
   edge_mode: "exact"       # "exact" | "outside" | "inside"
 
+# --- Renamer (phase5) ---
+renamer:
+  sd_pattern: "^ID(?P<patient>\\d+)_(?P<image>\\d+)_(?P<stain>HE|PAS)_SD_(?P<section>\\d+)\\.tif$"
+  nd_pattern: "^ID(?P<patient>\\d+)_(?P<image>\\d+)_(?P<stain>HE|PAS)_ND\\.tif$"
+  output_pattern: "ID{patient}_{image}_{section}.tif"
+
 # --- Runtime Logging ---
 runtime_log:
   enabled: true            # Habilitar logs de runtime
   dir: "_runtime_logs"     # Diretorio para logs de runtime
+
+# --- Relatórios ---
+reports:
+  dir: "_reports"          # Diretório para relatórios detalhados
+  generate_full: true      # Gerar relatório completo
+  generate_balance: true   # Gerar relatório de balanceamento
+  generate_corruption: true # Gerar relatório de corrupção
+  generate_patients: true  # Gerar relatório por paciente

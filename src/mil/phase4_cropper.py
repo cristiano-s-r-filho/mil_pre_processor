@@ -10,7 +10,7 @@ import openslide
 from tqdm import tqdm
 
 from mil.config import get
-from mil.margin import apply_margin_to_polygon
+from mil.margin import apply_margin_to_polygon, get_margin_config
 
 logger = logging.getLogger(__name__)
 
@@ -46,79 +46,95 @@ def _crop_regions_from_s0(
         Número de regiões recortadas.
     """
     slide = openslide.OpenSlide(s0_path)
-    geojson = json.loads(open(geojson_path).read())
-    features = geojson.get("features", [])
-    sw, sh = slide.dimensions
-    count = 0
+    try:
+        with open(geojson_path) as f:
+            geojson = json.load(f)
+        features = geojson.get("features", [])
+        sw, sh = slide.dimensions
+        count = 0
 
-    margin, mode = get_margin_config(edge_margin, edge_mode)
+        margin, mode = get_margin_config("phase4", edge_margin, edge_mode)
 
-    for idx, feat in enumerate(features, start=1):
-        geom = feat.get("geometry", {})
-        if geom.get("type") != "Polygon":
-            continue
+        # Tamanho do tile para processamento chunked (evita MemoryError)
+        TILE_SIZE = 512
 
-        coords = np.array(geom["coordinates"][0], dtype=np.float64)
-        coords = apply_margin_to_polygon(coords, margin, mode)
+        for idx, feat in enumerate(features, start=1):
+            geom = feat.get("geometry", {})
+            if geom.get("type") != "Polygon":
+                continue
 
-        xs, ys = coords[:, 0], coords[:, 1]
+            coords = np.array(geom["coordinates"][0], dtype=np.float64)
+            coords = apply_margin_to_polygon(coords, margin, mode)
 
-        x0 = max(0, int(xs.min()))
-        y0 = max(0, int(ys.min()))
-        x1 = min(sw, int(xs.max()) + 1)
-        y1 = min(sh, int(ys.max()) + 1)
-        w, h = x1 - x0, y1 - y0
+            xs, ys = coords[:, 0], coords[:, 1]
 
-        if w <= 0 or h <= 0:
-            continue
+            x0 = max(0, int(xs.min()))
+            y0 = max(0, int(ys.min()))
+            x1 = min(sw, int(xs.max()) + 1)
+            y1 = min(sh, int(ys.max()) + 1)
+            w, h = x1 - x0, y1 - y0
 
-        try:
-            region = slide.read_region((x0, y0), 0, (w, h))
-        except Exception as e:
-            logger.warning("Falha ao ler regiao (%d,%d,%d,%d) de %s: %s", x0, y0, w, h, s0_path, e)
-            continue
+            if w <= 0 or h <= 0:
+                continue
 
-        region_np = np.array(region.convert("RGB"))
+            shifted = coords - np.array([x0, y0], dtype=np.float64)
 
-        shifted = coords - np.array([x0, y0], dtype=np.float64)
+            if feather_radius > 0:
+                mask = _create_feathered_mask(shifted, h, w, feather_radius)
+            else:
+                mask = _create_binary_mask(shifted, h, w)
 
-        if feather_radius > 0:
-            mask = _create_feathered_mask(shifted, h, w, feather_radius)
-        else:
-            mask = _create_binary_mask(shifted, h, w)
+            if mask.max() == 0:
+                continue
 
-        if mask.max() == 0:
-            continue
+            # Processar em tiles para evitar MemoryError
+            out_name = f"ID{patient}_{image}_{stain}_SD_{idx}.tif"
+            out_path = os.path.join(out_dir, out_name)
 
-        masked = region_np * mask[:, :, np.newaxis]
-        masked = np.clip(masked, 0, 255).astype(np.uint8)
+            # Criar array de saída vazio
+            output = np.zeros((h, w, 3), dtype=np.uint8)
 
-        out_name = f"ID{patient}_{image}_{stain}_SD_{idx}.tif"
-        out_path = os.path.join(out_dir, out_name)
-        cv2.imwrite(out_path, masked[:, :, ::-1])
-        logger.info("Crop %s -> %s", os.path.basename(s0_path), out_name)
-        count += 1
+            # Processar tile por tile
+            for ty in range(0, h, TILE_SIZE):
+                for tx in range(0, w, TILE_SIZE):
+                    # Calcular dimensões do tile
+                    tile_h = min(TILE_SIZE, h - ty)
+                    tile_w = min(TILE_SIZE, w - tx)
 
-    slide.close()
+                    # Coordenadas absolutas no slide
+                    abs_x = x0 + tx
+                    abs_y = y0 + ty
+
+                    try:
+                        # Ler tile do slide
+                        tile_region = slide.read_region((abs_x, abs_y), 0, (tile_w, tile_h))
+                        tile_np = np.array(tile_region.convert("RGB"))
+
+                        # Aplicar máscara do tile
+                        tile_mask = mask[ty:ty+tile_h, tx:tx+tile_w]
+                        tile_masked = tile_np * tile_mask[:, :, np.newaxis]
+                        tile_masked = np.clip(tile_masked, 0, 255).astype(np.uint8)
+
+                        # Colocar no array de saída
+                        output[ty:ty+tile_h, tx:tx+tile_w] = tile_masked
+
+                        # Liberar memória
+                        del tile_region, tile_np, tile_mask, tile_masked
+                    except Exception as e:
+                        logger.warning("Falha ao ler tile (%d,%d) de %s: %s", abs_x, abs_y, s0_path, e)
+                        continue
+
+            # Salvar resultado
+            cv2.imwrite(out_path, output[:, :, ::-1])
+            logger.info("Crop %s -> %s", os.path.basename(s0_path), out_name)
+            count += 1
+
+            # Liberar memória
+            del output, mask, shifted, coords
+
+    finally:
+        slide.close()
     return count
-
-
-def get_margin_config(
-    edge_margin: int | None = None,
-    edge_mode: str | None = None,
-) -> tuple[int, str]:
-    """Obtém configuração de margem do config ou argumentos.
-
-    Args:
-        edge_margin: Valor externo (sobrescreve config).
-        edge_mode: Valor externo (sobrescreve config).
-
-    Returns:
-        Tupla (margin, mode).
-    """
-    margin = edge_margin if edge_margin is not None else get("cropper.edge_margin", 0)
-    mode = edge_mode if edge_mode is not None else get("cropper.edge_mode", "exact")
-    return margin, mode
 
 
 def _create_binary_mask(

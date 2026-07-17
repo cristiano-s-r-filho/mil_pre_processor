@@ -1,5 +1,6 @@
 """Carrega configuracao de config.yaml / config.local.yaml."""
 
+import copy
 import logging
 import os
 from pathlib import Path
@@ -17,6 +18,7 @@ _DEFAULTS = {
         "dataset_root": "",
         "dados_processados_root": "",
         "dados_para_patching_root": "",
+        "reports_dir": "_reports",
     },
     "alelos_validos": ["0alelos", "1alelo", "2alelos"],
     "reader": {
@@ -38,11 +40,23 @@ _DEFAULTS = {
         "s0_pattern": r"^ID(?P<patient>\d+)_(?P<image>\d+)_(?P<stain>HE|PAS)_S0\.tif$",
         "n0_pattern": r"^ID(?P<patient>\d+)_(?P<image>\d+)_(?P<stain>HE|PAS)_N0\.tif$",
     },
+    "renamer": {
+        "sd_pattern": r"^ID(?P<patient>\d+)_(?P<image>\d+)_(?P<stain>HE|PAS)_SD_(?P<section>\d+)\.tif$",
+        "nd_pattern": r"^ID(?P<patient>\d+)_(?P<image>\d+)_(?P<stain>HE|PAS)_ND\.tif$",
+        "output_pattern": "ID{patient}_{image}_{section}.tif",
+    },
+    "reports": {
+        "dir": "_reports",
+        "generate_full": True,
+        "generate_balance": True,
+        "generate_corruption": True,
+        "generate_patients": True,
+    },
 }
 
 
 def _deep_merge(base: dict, override: dict) -> dict:
-    result = base.copy()
+    result = copy.deepcopy(base)
     for k, v in override.items():
         if k in result and isinstance(result[k], dict) and isinstance(v, dict):
             result[k] = _deep_merge(result[k], v)
@@ -82,7 +96,7 @@ def load_config(config_path: str | Path | None = None) -> dict[str, Any]:
             config_path = default
         else:
             logger.warning("Nenhum config.yaml encontrado, usando padroes.")
-            _CONFIG = _DEFAULTS.copy()
+            _CONFIG = copy.deepcopy(_DEFAULTS)
             return _CONFIG
 
     config_path = Path(config_path)
@@ -93,11 +107,11 @@ def load_config(config_path: str | Path | None = None) -> dict[str, Any]:
         logger.info("Configuracao carregada de: %s", config_path)
     else:
         logger.warning("Arquivo %s nao encontrado, usando padroes.", config_path)
-        _CONFIG = _DEFAULTS.copy()
+        _CONFIG = copy.deepcopy(_DEFAULTS)
 
     # Resolver caminhos relativos para absolutos
     paths_cfg = _CONFIG.get("paths", {})
-    for key in ["dataset_root", "dados_processados_root", "dados_para_patching_root"]:
+    for key in ["dataset_root", "dados_processados_root", "dados_para_patching_root", "reports_dir"]:
         val = paths_cfg.get(key, "")
         if val:
             paths_cfg[key] = _resolve_path(val)
